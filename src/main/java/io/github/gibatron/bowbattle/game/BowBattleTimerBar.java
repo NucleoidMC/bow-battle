@@ -1,16 +1,16 @@
 package io.github.gibatron.bowbattle.game;
 
-import net.minecraft.entity.boss.BossBar;
-import xyz.nucleoid.plasmid.game.common.widget.BossBarWidget;
-import xyz.nucleoid.plasmid.game.common.GlobalWidgets;
-import net.minecraft.text.Text;
+import net.minecraft.world.BossEvent;
+import net.minecraft.network.chat.Component;
+import xyz.nucleoid.plasmid.api.game.common.GlobalWidgets;
+import xyz.nucleoid.plasmid.api.game.common.widget.BossBarWidget;
 
 public final class BowBattleTimerBar {
     private final BossBarWidget widget;
 
     public BowBattleTimerBar(GlobalWidgets widgets) {
-        Text title = Text.literal("Waiting for the game to start...");
-        this.widget = widgets.addBossBar(title, BossBar.Color.GREEN, BossBar.Style.NOTCHED_10);
+        Component title = Component.literal("Waiting for the game to start...");
+        this.widget = widgets.addBossBar(title, BossEvent.BossBarColor.GREEN, BossEvent.BossBarOverlay.NOTCHED_10);
     }
 
     public void update(long ticksUntilEnd, long totalTicksUntilEnd) {
@@ -20,13 +20,13 @@ public final class BowBattleTimerBar {
         }
     }
 
-    private Text getText(long ticksUntilEnd) {
+    private Component getText(long ticksUntilEnd) {
         long secondsUntilEnd = ticksUntilEnd / 20;
 
         long minutes = secondsUntilEnd / 60;
         long seconds = secondsUntilEnd % 60;
         String time = String.format("%02d:%02d left", minutes, seconds);
 
-        return Text.literal(time);
+        return Component.literal(time);
     }
 }

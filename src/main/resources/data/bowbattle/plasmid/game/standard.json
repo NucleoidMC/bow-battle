@@ -1,15 +1,15 @@
 {
   "type": "bowbattle:bowbattle",
-  "name": "Bow Battle Nether",
+  "name": "Bow Battle Standard",
   "icon": "minecraft:bow",
   "description": {
     "translate": "gameType.bowbattle.bowbattle.desc"
   },
   "map": {
-    "id": "bowbattle:nether"
+    "id": "bowbattle:standard"
   },
   "players": {
-    "min": 2,
+    "min": 1,
     "max": 10
   },
   "time_limit_secs": 60

@@ -2,7 +2,7 @@ package io.github.gibatron.bowbattle.game.map;
 
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
-import net.minecraft.util.Identifier;
+import net.minecraft.resources.Identifier;
 
 public record BowBattleMapConfig(Identifier id) {
     public static final Codec<BowBattleMapConfig> CODEC = RecordCodecBuilder.create(instance -> instance.group(

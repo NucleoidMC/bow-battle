@@ -1,60 +1,61 @@
 package io.github.gibatron.bowbattle.game;
 
 import io.github.gibatron.bowbattle.game.map.BowBattleMap;
-import net.minecraft.entity.effect.StatusEffectInstance;
-import net.minecraft.entity.effect.StatusEffects;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.GameMode;
-import xyz.nucleoid.plasmid.util.ItemStackBuilder;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.level.GameType;
+import xyz.nucleoid.plasmid.api.util.ItemStackBuilder;
 
-public record BowBattleSpawnLogic(ServerWorld world, BowBattleMap map) {
+import java.util.Set;
 
-    public void resetPlayer(ServerPlayerEntity player, GameMode gameMode) {
-        player.changeGameMode(gameMode);
-        player.setVelocity(Vec3d.ZERO);
-        player.clearStatusEffects();
+public record BowBattleSpawnLogic(ServerLevel world, BowBattleMap map) {
 
-        player.addStatusEffect(new StatusEffectInstance(
-                StatusEffects.INVISIBILITY,
+    public void resetPlayer(ServerPlayer player, GameType gameMode) {
+        player.setGameMode(gameMode);
+        player.setDeltaMovement(Vec3.ZERO);
+        player.removeAllEffects();
+
+        player.addEffect(new MobEffectInstance(
+                MobEffects.INVISIBILITY,
                 20 * 2,
                 1,
                 true,
                 false
         ));
 
-        player.addStatusEffect(new StatusEffectInstance(
-                StatusEffects.SPEED,
-                StatusEffectInstance.INFINITE,
+        player.addEffect(new MobEffectInstance(
+                MobEffects.SPEED,
+                MobEffectInstance.INFINITE_DURATION,
                 1,
                 true,
                 false
         ));
 
-        player.getInventory().clear();
+        player.getInventory().clearContent();
         ItemStack bow = ItemStackBuilder.of(Items.BOW)
                 .setUnbreakable()
-                .hideFlags()
                 .build();
-        player.getInventory().setStack(0, bow);
-        player.getInventory().insertStack(17, new ItemStack(Items.ARROW, 1));
+        player.getInventory().setItem(0, bow);
+        player.getInventory().add(17, new ItemStack(Items.ARROW, 1));
         player.setExperiencePoints(0);
-        player.setExperienceLevel(1);
+        player.setExperienceLevels(1);
     }
 
-    public void resetWaitingPlayer(ServerPlayerEntity player, GameMode gameMode) {
-        player.changeGameMode(gameMode);
-        player.getInventory().clear();
-        player.clearStatusEffects();
+    public void resetWaitingPlayer(ServerPlayer player, GameType gameMode) {
+        player.setGameMode(gameMode);
+        player.getInventory().clearContent();
+        player.removeAllEffects();
     }
 
-    public void spawnPlayer(ServerPlayerEntity player) {
-        ServerWorld world = this.world;
+    public void spawnPlayer(ServerPlayer player) {
+        ServerLevel world = this.world;
 
-        Vec3d pos = this.map.getSpawn(player.getRandom().nextInt(this.map.spawns.size())).centerBottom();
-        player.teleport(world, pos.getX(), pos.getY(), pos.getZ(), 0.0F, 0.0F);
+        Vec3 pos = this.map.getSpawn(player.getRandom().nextInt(this.map.spawns.size())).centerBottom();
+        player.teleportTo(world, pos.x(), pos.y(), pos.z(), Set.of(), 0.0F, 0.0F, false);
     }
 }

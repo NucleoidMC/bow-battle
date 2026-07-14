@@ -19,8 +19,8 @@
   ],
   "depends": {
     "fabricloader": ">=0.9.1",
-    "fabric": "*",
-    "plasmid": ">=0.5.0",
-    "java": ">=16"
+    "fabric-api": "*",
+    "plasmid": ">=0.7.0",
+    "java": ">=25"
   }
 }

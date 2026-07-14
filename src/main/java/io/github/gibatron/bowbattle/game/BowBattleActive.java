@@ -1,39 +1,43 @@
 package io.github.gibatron.bowbattle.game;
 
+import com.google.common.collect.ImmutableSet;
 import io.github.gibatron.bowbattle.BowBattle;
 import io.github.gibatron.bowbattle.game.map.BowBattleMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
-import net.minecraft.entity.damage.DamageSource;
-import net.minecraft.entity.effect.StatusEffectInstance;
-import net.minecraft.entity.effect.StatusEffects;
-import net.minecraft.entity.projectile.PersistentProjectileEntity;
-import net.minecraft.item.ArrowItem;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.particle.ParticleTypes;
-import net.minecraft.registry.tag.DamageTypeTags;
-import net.minecraft.scoreboard.AbstractTeam;
-import net.minecraft.scoreboard.Scoreboard;
-import net.minecraft.scoreboard.Team;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.sound.SoundCategory;
-import net.minecraft.sound.SoundEvents;
-import net.minecraft.text.Text;
-import net.minecraft.util.ActionResult;
-import net.minecraft.util.Formatting;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.GameMode;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.entity.Relative;
+import net.minecraft.world.entity.projectile.arrow.AbstractArrow;
+import net.minecraft.world.item.ArrowItem;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.tags.DamageTypeTags;
+import net.minecraft.world.scores.Team;
+import net.minecraft.server.ServerScoreboard;
+import net.minecraft.world.scores.PlayerTeam;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.network.chat.Component;
+import net.minecraft.ChatFormatting;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.level.GameType;
 import org.apache.commons.lang3.RandomStringUtils;
-import xyz.nucleoid.plasmid.game.GameCloseReason;
-import xyz.nucleoid.plasmid.game.GameSpace;
-import xyz.nucleoid.plasmid.game.event.GameActivityEvents;
-import xyz.nucleoid.plasmid.game.event.GamePlayerEvents;
-import xyz.nucleoid.plasmid.game.player.PlayerSet;
-import xyz.nucleoid.plasmid.game.rule.GameRuleType;
-import xyz.nucleoid.plasmid.util.PlayerRef;
-import xyz.nucleoid.plasmid.game.common.GlobalWidgets;
+import xyz.nucleoid.plasmid.api.game.GameCloseReason;
+import xyz.nucleoid.plasmid.api.game.GameSpace;
+import xyz.nucleoid.plasmid.api.game.common.GlobalWidgets;
+import xyz.nucleoid.plasmid.api.game.event.GameActivityEvents;
+import xyz.nucleoid.plasmid.api.game.event.GamePlayerEvents;
+import xyz.nucleoid.plasmid.api.game.player.JoinOffer;
+import xyz.nucleoid.plasmid.api.game.player.PlayerSet;
+import xyz.nucleoid.plasmid.api.game.rule.GameRuleType;
+import xyz.nucleoid.plasmid.api.util.PlayerRef;
+import xyz.nucleoid.plasmid.api.util.PlayerUtil;
+import xyz.nucleoid.stimuli.event.EventResult;
 import xyz.nucleoid.stimuli.event.player.PlayerDamageEvent;
 import xyz.nucleoid.stimuli.event.player.PlayerDeathEvent;
 import xyz.nucleoid.stimuli.event.projectile.ArrowFireEvent;
@@ -45,7 +49,7 @@ import java.util.stream.Collectors;
 public class BowBattleActive {
     private final BowBattleConfig config;
 
-    public final ServerWorld world;
+    public final ServerLevel level;
     public final GameSpace gameSpace;
     private final BowBattleMap gameMap;
 
@@ -54,23 +58,23 @@ public class BowBattleActive {
     private final BowBattleStageManager stageManager;
     private final boolean ignoreWinState;
     private final BowBattleTimerBar timerBar;
-    private final Team scoreboardTeam;
+    private final PlayerTeam scoreboardTeam;
 
-    private BowBattleActive(GameSpace gameSpace, ServerWorld world, BowBattleMap map, GlobalWidgets widgets, BowBattleConfig config, Set<PlayerRef> participants) {
-        this.world = world;
+    private BowBattleActive(GameSpace gameSpace, ServerLevel level, BowBattleMap map, GlobalWidgets widgets, BowBattleConfig config, Set<PlayerRef> participants) {
+        this.level = level;
         this.gameSpace = gameSpace;
         this.config = config;
         this.gameMap = map;
-        this.spawnLogic = new BowBattleSpawnLogic(this.world, map);
+        this.spawnLogic = new BowBattleSpawnLogic(this.level, map);
         this.participants = new Object2ObjectOpenHashMap<>();
 
-        Scoreboard scoreboard = gameSpace.getServer().getScoreboard();
-        scoreboardTeam = scoreboard.addTeam(RandomStringUtils.randomAlphanumeric(16));
-        scoreboardTeam.setNameTagVisibilityRule(AbstractTeam.VisibilityRule.NEVER);
-        scoreboardTeam.setCollisionRule(AbstractTeam.CollisionRule.NEVER);
+        ServerScoreboard scoreboard = gameSpace.getServer().getScoreboard();
+        scoreboardTeam = scoreboard.addPlayerTeam(RandomStringUtils.randomAlphanumeric(16));
+        scoreboardTeam.setNameTagVisibility(Team.Visibility.NEVER);
+        scoreboardTeam.setCollisionRule(Team.CollisionRule.NEVER);
 
         for (PlayerRef player : participants) {
-            scoreboard.addPlayerToTeam(player.getEntity(this.world).getName().getString(), scoreboardTeam);
+            scoreboard.addPlayerToTeam(player.getEntity(this.level).getName().getString(), scoreboardTeam);
             this.participants.put(player, new BowBattlePlayer());
         }
 
@@ -79,7 +83,7 @@ public class BowBattleActive {
         this.timerBar = new BowBattleTimerBar(widgets);
     }
 
-    public static void open(GameSpace gameSpace, ServerWorld world, BowBattleMap map, BowBattleConfig config) {
+    public static void open(GameSpace gameSpace, ServerLevel level, BowBattleMap map, BowBattleConfig config) {
         gameSpace.setActivity(activity -> {
             var widgets = GlobalWidgets.addTo(activity);
 
@@ -87,7 +91,7 @@ public class BowBattleActive {
                     .map(PlayerRef::of)
                     .collect(Collectors.toSet());
 
-            var active = new BowBattleActive(gameSpace, world, map, widgets, config, participants);
+            var active = new BowBattleActive(gameSpace, level, map, widgets, config, participants);
 
             activity.deny(GameRuleType.CRAFTING);
             activity.deny(GameRuleType.PORTALS);
@@ -107,8 +111,8 @@ public class BowBattleActive {
 
             activity.listen(GameActivityEvents.ENABLE, active::onOpen);
             activity.listen(GameActivityEvents.DISABLE, active::onClose);
-
-            activity.listen(GamePlayerEvents.OFFER, offer -> offer.accept(active.world, active.gameMap.getSpawn(0).center()));
+            activity.listen(GamePlayerEvents.OFFER, JoinOffer::acceptParticipants);
+            activity.listen(GamePlayerEvents.ACCEPT, acceptor -> acceptor.teleport(active.level, active.gameMap.getSpawn(0).center()));
             activity.listen(GamePlayerEvents.ADD, active::addPlayer);
             activity.listen(GamePlayerEvents.REMOVE, active::removePlayer);
 
@@ -122,39 +126,39 @@ public class BowBattleActive {
 
     private void onOpen() {
         for (PlayerRef ref : this.participants.keySet()) {
-            ref.ifOnline(this.world, this::spawnParticipant);
+            ref.ifOnline(this.level, this::spawnParticipant);
         }
-        this.stageManager.onOpen(this.world.getTime(), this.config);
+        this.stageManager.onOpen(this.level.getGameTime(), this.config);
     }
 
     private void onClose() {
-        gameSpace.getServer().getScoreboard().removeTeam(scoreboardTeam);
+        gameSpace.getServer().getScoreboard().removePlayerTeam(scoreboardTeam);
     }
 
-    private void addPlayer(ServerPlayerEntity player) {
+    private void addPlayer(ServerPlayer player) {
         if (!this.participants.containsKey(PlayerRef.of(player))) {
             this.spawnSpectator(player);
         }
     }
 
-    private void removePlayer(ServerPlayerEntity player) {
+    private void removePlayer(ServerPlayer player) {
         this.participants.remove(PlayerRef.of(player));
     }
 
-    private ActionResult onPlayerDamage(ServerPlayerEntity player, DamageSource source, float amount) {
-        if (source.isIn(DamageTypeTags.IS_PROJECTILE) && source.getAttacker() != player) {
-            if (source.getAttacker() != null) {
-                ((ServerPlayerEntity) source.getAttacker()).playSound(SoundEvents.ENTITY_ARROW_HIT_PLAYER, SoundCategory.PLAYERS, 1f, 1f);
-                gameSpace.getPlayers().sendMessage(Text.literal(String.format("☠ - %s was shot by %s", player.getDisplayName().getString(), source.getAttacker().getDisplayName().getString())).formatted(Formatting.GRAY));
-                participants.get(PlayerRef.of((ServerPlayerEntity) source.getAttacker())).kills += 1;
+    private EventResult onPlayerDamage(ServerPlayer player, DamageSource source, float amount) {
+        if (source.is(DamageTypeTags.IS_PROJECTILE) && source.getEntity() != player) {
+            if (source.getEntity() != null) {
+                PlayerUtil.playSoundToPlayer(((ServerPlayer) source.getEntity()), SoundEvents.ARROW_HIT_PLAYER, SoundSource.PLAYERS, 1f, 1f);
+                gameSpace.getPlayers().sendMessage(Component.literal(String.format("☠ - %s was shot by %s", player.getDisplayName().getString(), source.getEntity().getDisplayName().getString())).withStyle(ChatFormatting.GRAY));
+                participants.get(PlayerRef.of((ServerPlayer) source.getEntity())).kills += 1;
             }
             //Thanks Potatoboy9999 ;)
             for (int i = 0; i < 75; i++) {
-                this.world.spawnParticles(
+                this.level.sendParticles(
                         ParticleTypes.FIREWORK,
-                        player.getPos().getX(),
-                        player.getPos().getY() + 1.0f,
-                        player.getPos().getZ(),
+                        player.position().x(),
+                        player.position().y() + 1.0f,
+                        player.position().z(),
                         1,
                         ((player.getRandom().nextFloat() * 2.0f) - 1.0f) * 0.35f,
                         ((player.getRandom().nextFloat() * 2.0f) - 1.0f) * 0.35f,
@@ -164,35 +168,35 @@ public class BowBattleActive {
             }
             this.spawnParticipant(player);
         }
-        return ActionResult.FAIL;
+        return EventResult.DENY;
     }
 
-    private ActionResult onPlayerDeath(ServerPlayerEntity player, DamageSource source) {
+    private EventResult onPlayerDeath(ServerPlayer player, DamageSource source) {
         this.spawnParticipant(player);
-        return ActionResult.FAIL;
+        return EventResult.DENY;
     }
 
-    private ActionResult onPlayerFire(ServerPlayerEntity player, ItemStack bowStack, ArrowItem arrowItem, int remaining, PersistentProjectileEntity projectile) {
-        projectile.pickupType = PersistentProjectileEntity.PickupPermission.DISALLOWED;
-        Vec3d velocity = projectile.getVelocity();
-        projectile.setVelocity(velocity.x, velocity.y, velocity.z, 5F, 0.0F);
+    private EventResult onPlayerFire(ServerPlayer player, ItemStack bowStack, ArrowItem arrowItem, int remaining, AbstractArrow projectile) {
+        projectile.pickup = AbstractArrow.Pickup.DISALLOWED;
+        Vec3 velocity = projectile.getDeltaMovement();
+        projectile.shoot(velocity.x, velocity.y, velocity.z, 5F, 0.0F);
         projectile.setNoGravity(true);
         player.experienceLevel -= 1;
-        return ActionResult.PASS;
+        return EventResult.PASS;
     }
 
-    private void spawnParticipant(ServerPlayerEntity player) {
-        this.spawnLogic.resetPlayer(player, GameMode.ADVENTURE);
+    private void spawnParticipant(ServerPlayer player) {
+        this.spawnLogic.resetPlayer(player, GameType.ADVENTURE);
         this.spawnLogic.spawnPlayer(player);
     }
 
-    private void spawnSpectator(ServerPlayerEntity player) {
-        this.spawnLogic.resetPlayer(player, GameMode.SPECTATOR);
+    private void spawnSpectator(ServerPlayer player) {
+        this.spawnLogic.resetPlayer(player, GameType.SPECTATOR);
         this.spawnLogic.spawnPlayer(player);
     }
 
     private void tick() {
-        long time = this.world.getTime();
+        long time = this.level.getGameTime();
 
         BowBattleStageManager.IdleTickResult result = this.stageManager.tick(time, gameSpace);
 
@@ -212,28 +216,32 @@ public class BowBattleActive {
         this.timerBar.update(this.stageManager.finishTime - time, this.config.timeLimitSecs() * 20L);
 
         PlayerSet players = this.gameSpace.getPlayers();
-        for (ServerPlayerEntity player : players) {
+        for (ServerPlayer player : players) {
             if (!player.isSpectator()) {
-                boolean usingBow = player.getActiveItem().getItem() == Items.BOW;
-                player.sendMessage(Text.literal(String.format("Kills: %s", participants.get(PlayerRef.of(player)).kills)).formatted(Formatting.WHITE, Formatting.BOLD), true);
+                boolean usingBow = player.getUseItem().getItem() == Items.BOW;
+                player.sendSystemMessage(Component.literal(String.format("Kills: %s", participants.get(PlayerRef.of(player)).kills)).withStyle(ChatFormatting.WHITE, ChatFormatting.BOLD), true);
                 if (player.experienceLevel < 5 && !usingBow) {
-                    if (player.age % 4 == 0)
-                        player.addExperience(1);
+                    if (player.tickCount % 4 == 0)
+                        player.giveExperiencePoints(1);
                 }
-                //player.setNoGravity(usingBow);
-                if (usingBow && player.getInventory().contains(Items.ARROW.getDefaultStack()) && player.getInventory().getStack(17).getCount() > 0) {
-                    applyHoverLevitation(player);
-                    player.setVelocity(0, 0, 0);
-                    player.velocityModified = true;
+                player.setNoGravity(usingBow);
+
+                if (usingBow && player.getInventory().contains(Items.ARROW.getDefaultInstance()) && player.getInventory().getItem(17).getCount() > 0) {
+                    //applyHoverLevitation(player);
+                    // Set X and Y as relative so it will send 0 change when we pass yaw (yaw - yaw = 0) and pitch
+                    Set<Relative> flags = ImmutableSet.of(Relative.X_ROT, Relative.Y_ROT);
+
+                    // Teleport without changing the pitch and yaw
+                    player.teleportTo(player.level(), player.getX(), player.getY(), player.getZ(), flags, 0, 0, false);
                 } else {
-                    if (player.hasStatusEffect(StatusEffects.LEVITATION) && player.getStatusEffect(StatusEffects.LEVITATION).getAmplifier() != 254)
-                        player.removeStatusEffect(StatusEffects.LEVITATION);
+                    if (player.hasEffect(MobEffects.LEVITATION) && player.getEffect(MobEffects.LEVITATION).getAmplifier() != 254)
+                        player.removeEffect(MobEffects.LEVITATION);
                 }
 
-                if (!player.hasStatusEffect(StatusEffects.INVISIBILITY) && !player.hasStatusEffect(StatusEffects.GLOWING)) {
-                    player.addStatusEffect(new StatusEffectInstance(
-                            StatusEffects.GLOWING,
-                            StatusEffectInstance.INFINITE,
+                if (!player.hasEffect(MobEffects.INVISIBILITY) && !player.hasEffect(MobEffects.GLOWING)) {
+                    player.addEffect(new MobEffectInstance(
+                            MobEffects.GLOWING,
+                            MobEffectInstance.INFINITE_DURATION,
                             1,
                             true,
                             false
@@ -243,26 +251,26 @@ public class BowBattleActive {
         }
     }
 
-    private void applyHoverLevitation(ServerPlayerEntity player) {
-        if (!player.hasStatusEffect(StatusEffects.LEVITATION) || player.getStatusEffect(StatusEffects.LEVITATION).getAmplifier() == 254) {
-            player.removeStatusEffect(StatusEffects.LEVITATION);
-            player.addStatusEffect(new StatusEffectInstance(StatusEffects.LEVITATION, StatusEffectInstance.INFINITE, -1, true, false));
+    private void applyHoverLevitation(ServerPlayer player) {
+        if (!player.hasEffect(MobEffects.LEVITATION) || player.getEffect(MobEffects.LEVITATION).getAmplifier() == 254) {
+            player.removeEffect(MobEffects.LEVITATION);
+            player.addEffect(new MobEffectInstance(MobEffects.LEVITATION, MobEffectInstance.INFINITE_DURATION, -2, true, false));
         }
     }
 
     private void broadcastWin(WinResult result) {
-        ServerPlayerEntity winningPlayer = result.winningPlayer();
+        ServerPlayer winningPlayer = result.winningPlayer();
 
-        Text message;
+        Component message;
         if (winningPlayer != null) {
-            message = Text.literal("★ - ").append(winningPlayer.getDisplayName().copy().append(" has won the game by getting " + participants.get(PlayerRef.of(winningPlayer)).kills + " kills!").formatted(Formatting.GOLD));
+            message = Component.literal("★ - ").append(winningPlayer.getDisplayName().copy().append(" has won the game by getting " + participants.get(PlayerRef.of(winningPlayer)).kills + " kills!").withStyle(ChatFormatting.GOLD));
         } else {
-            message = Text.literal("The game ended, but nobody won!").formatted(Formatting.GOLD);
+            message = Component.literal("The game ended, but nobody won!").withStyle(ChatFormatting.GOLD);
         }
 
         PlayerSet players = this.gameSpace.getPlayers();
         players.sendMessage(message);
-        players.playSound(SoundEvents.ENTITY_VILLAGER_YES);
+        players.playSound(SoundEvents.VILLAGER_YES);
     }
 
     private WinResult checkWinResult() {
@@ -280,17 +288,17 @@ public class BowBattleActive {
                 best = entry.getKey();
         }
         if (best != null)
-            return WinResult.win(best.getEntity(this.world));
+            return WinResult.win(best.getEntity(this.level));
         return WinResult.no();
     }
 
-    record WinResult(ServerPlayerEntity winningPlayer, boolean win) {
+    record WinResult(ServerPlayer winningPlayer, boolean win) {
 
         static WinResult no() {
             return new WinResult(null, false);
         }
 
-        static WinResult win(ServerPlayerEntity player) {
+        static WinResult win(ServerPlayer player) {
             return new WinResult(player, true);
         }
     }

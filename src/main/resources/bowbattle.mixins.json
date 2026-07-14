@@ -5,8 +5,8 @@
   "compatibilityLevel": "JAVA_8",
   "mixins": [
     "BowItemMixin",
-    "ProjectileEntityMixin",
-    "PlayerEntityMixin"
+    "ProjectileMixin",
+    "PlayerMixin"
   ],
   "injectors": {
     "defaultRequire": 1

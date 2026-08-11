@@ -1,34 +1,26 @@
 package io.github.gibatron.bowbattle.game.map;
 
 import io.github.gibatron.bowbattle.BowBattle;
-import net.minecraft.text.LiteralText;
-import xyz.nucleoid.plasmid.game.GameOpenException;
-import xyz.nucleoid.plasmid.map.template.MapTemplate;
-import xyz.nucleoid.plasmid.map.template.MapTemplateSerializer;
-import xyz.nucleoid.plasmid.util.BlockBounds;
+import net.minecraft.server.MinecraftServer;
+import xyz.nucleoid.map_templates.BlockBounds;
+import xyz.nucleoid.map_templates.MapTemplate;
+import xyz.nucleoid.map_templates.MapTemplateSerializer;
 
 import java.io.IOException;
-import java.util.Collection;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.ArrayList;
+import java.util.List;
 
-public class BowBattleMapGenerator {
+public record BowBattleMapGenerator(BowBattleMapConfig config) {
 
-    private final BowBattleMapConfig config;
-
-    public BowBattleMapGenerator(BowBattleMapConfig config) {
-        this.config = config;
-    }
-
-    public BowBattleMap build() throws GameOpenException {
+    public BowBattleMap create(MinecraftServer server) {
+        MapTemplate template = MapTemplate.createEmpty();
         try {
-            MapTemplate template = MapTemplateSerializer.INSTANCE.loadFromResource(this.config.id);
-            BowBattleMap map = new BowBattleMap(template, this.config);
-
-            template.getMetadata().getRegions("spawn").forEach(x -> map.spawns.add(x.getBounds()));
-
-            return map;
+            template = MapTemplateSerializer.loadFromResource(server, this.config.id());
         } catch (IOException e) {
-            throw new GameOpenException(new LiteralText("Failed to load map"));
+            BowBattle.LOGGER.error("Failed to load map template", e);
         }
+        List<BlockBounds> spawns = new ArrayList<>();
+        template.getMetadata().getRegions("spawn").forEach(x -> spawns.add(x.getBounds()));
+        return new BowBattleMap(template, spawns);
     }
 }

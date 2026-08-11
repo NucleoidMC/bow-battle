@@ -1,56 +1,94 @@
 package io.github.gibatron.bowbattle.game;
 
-import net.minecraft.entity.projectile.PersistentProjectileEntity;
-import net.minecraft.item.ArrowItem;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.text.LiteralText;
-import net.minecraft.text.Text;
-import net.minecraft.util.ActionResult;
-import xyz.nucleoid.plasmid.game.*;
-import xyz.nucleoid.plasmid.game.event.*;
-import net.minecraft.entity.damage.DamageSource;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.world.GameMode;
 import io.github.gibatron.bowbattle.game.map.BowBattleMap;
 import io.github.gibatron.bowbattle.game.map.BowBattleMapGenerator;
-import xyz.nucleoid.fantasy.BubbleWorldConfig;
+import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.server.world.ServerWorld;
+import net.minecraft.util.ActionResult;
+import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.GameMode;
+import xyz.nucleoid.fantasy.RuntimeWorldConfig;
+import xyz.nucleoid.plasmid.api.game.GameOpenContext;
+import xyz.nucleoid.plasmid.api.game.GameOpenProcedure;
+import xyz.nucleoid.plasmid.api.game.GameResult;
+import xyz.nucleoid.plasmid.api.game.GameSpace;
+import xyz.nucleoid.plasmid.api.game.common.GameWaitingLobby;
+import xyz.nucleoid.plasmid.api.game.event.GameActivityEvents;
+import xyz.nucleoid.plasmid.api.game.event.GamePlayerEvents;
+import xyz.nucleoid.plasmid.api.game.rule.GameRuleType;
+import xyz.nucleoid.stimuli.event.EventResult;
+import xyz.nucleoid.stimuli.event.player.PlayerDamageEvent;
 
 public class BowBattleWaiting {
+
     private final GameSpace gameSpace;
+    private final ServerWorld world;
     private final BowBattleMap map;
     private final BowBattleConfig config;
     private final BowBattleSpawnLogic spawnLogic;
 
-    private BowBattleWaiting(GameSpace gameSpace, BowBattleMap map, BowBattleConfig config) {
+    private BowBattleWaiting(
+        GameSpace gameSpace,
+        ServerWorld world,
+        BowBattleMap map,
+        BowBattleConfig config
+    ) {
+        this.world = world;
         this.gameSpace = gameSpace;
         this.map = map;
         this.config = config;
-        this.spawnLogic = new BowBattleSpawnLogic(gameSpace, map);
+        this.spawnLogic = new BowBattleSpawnLogic(this.world, map);
     }
 
-    public static GameOpenProcedure open(GameOpenContext<BowBattleConfig> context) {
-        BowBattleConfig config = context.getConfig();
-        BowBattleMapGenerator generator = new BowBattleMapGenerator(config.mapConfig);
-        BowBattleMap map = generator.build();
+    public static GameOpenProcedure open(
+        GameOpenContext<BowBattleConfig> context
+    ) {
+        BowBattleConfig config = context.config();
+        BowBattleMapGenerator generator = new BowBattleMapGenerator(
+            config.map()
+        );
+        BowBattleMap map = generator.create(context.server());
 
-        BubbleWorldConfig worldConfig = new BubbleWorldConfig()
-                .setGenerator(map.asGenerator(context.getServer()))
-                .setDefaultGameMode(GameMode.SPECTATOR);
+        RuntimeWorldConfig worldConfig = new RuntimeWorldConfig()
+            .setGenerator(map.asGenerator(context.server()));
 
-        return context.createOpenProcedure(worldConfig, game -> {
-            BowBattleWaiting waiting = new BowBattleWaiting(game.getSpace(), map, context.getConfig());
+        return context.openWithWorld(worldConfig, (game, world) -> {
+            GameWaitingLobby.addTo(game, config.players());
 
-            GameWaitingLobby.applyTo(game, config.playerConfig);
+            var waiting = new BowBattleWaiting(
+                game.getGameSpace(),
+                world,
+                map,
+                context.config()
+            );
 
-            game.on(RequestStartListener.EVENT, waiting::requestStart);
-            game.on(PlayerAddListener.EVENT, waiting::addPlayer);
+            game.deny(GameRuleType.PVP);
+            game.deny(GameRuleType.FALL_DAMAGE);
+            game.deny(GameRuleType.HUNGER);
+            game.deny(GameRuleType.THROW_ITEMS);
+
+            game.listen(GamePlayerEvents.ACCEPT, player ->
+                player.teleport(
+                    world,
+                    map.getSpawn(0) != null
+                        ? map.getSpawn(0).center()
+                        : new Vec3d(0, 256, 0)
+                )
+            );
+            game.listen(
+                GameActivityEvents.REQUEST_START,
+                waiting::requestStart
+            );
+            game.listen(GamePlayerEvents.ADD, waiting::addPlayer);
+            game.listen(PlayerDamageEvent.EVENT, (player, source, amount) ->
+                EventResult.DENY
+            );
         });
     }
 
-    private StartResult requestStart() {
-        BowBattleActive.open(this.gameSpace, this.map, this.config);
-        return StartResult.OK;
+    private GameResult requestStart() {
+        BowBattleActive.open(this.gameSpace, this.world, this.map, this.config);
+        return GameResult.ok();
     }
 
     private void addPlayer(ServerPlayerEntity player) {
@@ -58,7 +96,7 @@ public class BowBattleWaiting {
     }
 
     private void spawnPlayer(ServerPlayerEntity player) {
-        this.spawnLogic.resetPlayer(player, GameMode.ADVENTURE);
+        this.spawnLogic.resetWaitingPlayer(player, GameMode.ADVENTURE);
         this.spawnLogic.spawnPlayer(player);
     }
 }

@@ -3,20 +3,20 @@ package io.github.gibatron.bowbattle.game;
 import com.google.common.collect.ImmutableSet;
 import it.unimi.dsi.fastutil.objects.Object2ObjectMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
-import net.minecraft.sound.SoundCategory;
-import xyz.nucleoid.plasmid.game.GameSpace;
-import xyz.nucleoid.plasmid.game.player.PlayerSet;
+import java.util.Set;
+import net.minecraft.network.packet.s2c.play.PositionFlag;
 import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.network.packet.s2c.play.PlayerPositionLookS2CPacket.Flag;
+import net.minecraft.sound.SoundCategory;
 import net.minecraft.sound.SoundEvents;
-import net.minecraft.text.LiteralText;
+import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.GameMode;
-
-import java.util.Set;
+import xyz.nucleoid.plasmid.api.game.GameSpace;
+import xyz.nucleoid.plasmid.api.game.player.PlayerSet;
 
 public class BowBattleStageManager {
+
     private long closeTime = -1;
     public long finishTime = -1;
     private long startTime = -1;
@@ -29,7 +29,7 @@ public class BowBattleStageManager {
 
     public void onOpen(long time, BowBattleConfig config) {
         this.startTime = time - (time % 20) + (4 * 20) + 19;
-        this.finishTime = this.startTime + (config.timeLimitSecs * 20);
+        this.finishTime = this.startTime + (config.timeLimitSecs() * 20L);
     }
 
     public IdleTickResult tick(long time, GameSpace space) {
@@ -52,7 +52,7 @@ public class BowBattleStageManager {
             if (!this.setSpectator) {
                 this.setSpectator = true;
                 for (ServerPlayerEntity player : space.getPlayers()) {
-                    player.setGameMode(GameMode.SPECTATOR);
+                    player.changeGameMode(GameMode.SPECTATOR);
                 }
             }
 
@@ -73,7 +73,9 @@ public class BowBattleStageManager {
                     continue;
                 }
 
-                FrozenPlayer state = this.frozen.computeIfAbsent(player, p -> new FrozenPlayer());
+                FrozenPlayer state =
+                    this.frozen.computeIfAbsent(player, p -> new FrozenPlayer()
+                        );
 
                 if (state.lastPos == null) {
                     state.lastPos = player.getPos();
@@ -84,10 +86,20 @@ public class BowBattleStageManager {
                 double destZ = state.lastPos.z;
 
                 // Set X and Y as relative so it will send 0 change when we pass yaw (yaw - yaw = 0) and pitch
-                Set<Flag> flags = ImmutableSet.of(Flag.X_ROT, Flag.Y_ROT);
+                Set<PositionFlag> flags = ImmutableSet.of(
+                    PositionFlag.X_ROT,
+                    PositionFlag.Y_ROT
+                );
 
                 // Teleport without changing the pitch and yaw
-                player.networkHandler.teleportRequest(destX, destY, destZ, player.yaw, player.pitch, flags);
+                player.networkHandler.requestTeleport(
+                    destX,
+                    destY,
+                    destZ,
+                    player.getYaw(),
+                    player.getPitch()
+                    //flags
+                );
             }
         }
 
@@ -97,16 +109,35 @@ public class BowBattleStageManager {
             PlayerSet players = space.getPlayers();
 
             if (sec > 0) {
-                players.sendTitle(new LiteralText(Integer.toString(sec)).formatted(Formatting.BOLD));
-                players.sendSound(SoundEvents.BLOCK_NOTE_BLOCK_HARP, SoundCategory.PLAYERS, 1.0F, 1.0F);
+                players.showTitle(
+                    Text.literal(Integer.toString(sec)).formatted(
+                        Formatting.BOLD
+                    ),
+                    20
+                );
+                players.playSound(
+                    SoundEvents.BLOCK_NOTE_BLOCK_HARP.value(),
+                    SoundCategory.PLAYERS,
+                    1.0F,
+                    1.0F
+                );
             } else {
-                players.sendTitle(new LiteralText("Go!").formatted(Formatting.BOLD));
-                players.sendSound(SoundEvents.BLOCK_NOTE_BLOCK_HARP, SoundCategory.PLAYERS, 1.0F, 2.0F);
+                players.showTitle(
+                    Text.literal("Go!").formatted(Formatting.BOLD),
+                    20
+                );
+                players.playSound(
+                    SoundEvents.BLOCK_NOTE_BLOCK_HARP.value(),
+                    SoundCategory.PLAYERS,
+                    1.0F,
+                    2.0F
+                );
             }
         }
     }
 
     public static class FrozenPlayer {
+
         public Vec3d lastPos;
     }
 

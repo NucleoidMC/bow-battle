@@ -1,0 +1,16 @@
+{
+  "type": "bowbattle:bowbattle",
+  "name": "Bow Battle Standard",
+  "icon": "minecraft:bow",
+  "description": {
+    "translate": "gameType.bowbattle.bowbattle.desc"
+  },
+  "map": {
+    "id": "bowbattle:standard"
+  },
+  "players": {
+    "min": 2,
+    "max": 10
+  },
+  "time_limit_secs": 60
+}

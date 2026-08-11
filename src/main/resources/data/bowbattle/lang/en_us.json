@@ -1,3 +1,4 @@
 {
-  "game.bowbattle.bowbattle": "Bow Battle"
+  "gameType.bowbattle.bowbattle": "Bow Battle",
+  "gameType.bowbattle.bowbattle.desc": "A fast-paced free-for-all shootout."
 }

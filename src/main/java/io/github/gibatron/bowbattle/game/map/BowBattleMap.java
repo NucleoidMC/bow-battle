@@ -1,23 +1,24 @@
 package io.github.gibatron.bowbattle.game.map;
 
-import net.minecraft.server.MinecraftServer;
-import xyz.nucleoid.plasmid.map.template.MapTemplate;
-import xyz.nucleoid.plasmid.map.template.TemplateChunkGenerator;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.gen.chunk.ChunkGenerator;
-import xyz.nucleoid.plasmid.util.BlockBounds;
-
-import java.util.ArrayList;
 import java.util.List;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.world.gen.chunk.ChunkGenerator;
+import xyz.nucleoid.map_templates.BlockBounds;
+import xyz.nucleoid.map_templates.MapTemplate;
+import xyz.nucleoid.plasmid.api.game.world.generator.TemplateChunkGenerator;
 
 public class BowBattleMap {
-    private final MapTemplate template;
-    private final BowBattleMapConfig config;
-    public List<BlockBounds> spawns = new ArrayList<>();
 
-    public BowBattleMap(MapTemplate template, BowBattleMapConfig config) {
+    private final MapTemplate template;
+    public List<BlockBounds> spawns;
+
+    public BowBattleMap(MapTemplate template, List<BlockBounds> spawns) {
         this.template = template;
-        this.config = config;
+        this.spawns = spawns;
+    }
+
+    public BlockBounds getSpawn(int index) {
+        return this.spawns.get(index);
     }
 
     public ChunkGenerator asGenerator(MinecraftServer server) {

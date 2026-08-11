@@ -2,12 +2,8 @@
   "required": true,
   "minVersion": "0.8",
   "package": "io.github.gibatron.bowbattle.mixin",
-  "compatibilityLevel": "JAVA_8",
-  "mixins": [
-    "BowItemMixin",
-    "ProjectileEntityMixin",
-    "PlayerEntityMixin"
-  ],
+  "compatibilityLevel": "JAVA_21",
+  "mixins": ["BowItemMixin", "ProjectileEntityMixin", "PlayerEntityMixin"],
   "injectors": {
     "defaultRequire": 1
   }

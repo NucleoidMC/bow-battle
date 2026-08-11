@@ -4,23 +4,17 @@
   "version": "${version}",
   "name": "Bow-Battle",
   "description": "A battle with bows",
-  "authors": [
-    "MrTurtle"
-  ],
+  "authors": ["MrTurtle"],
   "license": "MIT",
   "environment": "*",
   "entrypoints": {
-    "main": [
-      "io.github.gibatron.bowbattle.BowBattle"
-    ]
+    "main": ["io.github.gibatron.bowbattle.BowBattle"]
   },
-  "mixins": [
-    "bowbattle.mixins.json"
-  ],
+  "mixins": ["bowbattle.mixins.json"],
   "depends": {
-    "fabricloader": ">=0.9.1",
+    "fabricloader": ">=0.16.1",
     "fabric": "*",
-    "minecraft": "1.16.x",
-    "plasmid": "0.4.x"
+    "plasmid": ">=0.6.0",
+    "java": ">=21"
   }
 }
